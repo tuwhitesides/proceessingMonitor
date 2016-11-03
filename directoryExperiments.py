@@ -8,12 +8,18 @@ Created on Fri Sep 16 12:20:11 2016
 import os
 from pathlib import Path
 from pylab import *
+import matplotlib.pyplot as plt
 
 def getFileCreation(directory, tag):
     for newPath in directory.glob(tag):
         return newPath.stat().st_birthtime
-
     return -1
+
+def getStepDuration(completionDict, stepOfInterest):
+    durations = [];
+    for key in completionDict:
+        durations += [completionDict[key].stepOfInterest];
+    return durations
 
 class ScanProcessing(object):
     """docstring for ScanProcessing."""
@@ -26,15 +32,17 @@ class ScanProcessing(object):
 
         self.processFramescanTime = getFileCreation(pathToScanDirectory, '*frame.data.mat') - getFileCreation(pathToScanDirectory, '*zChange*.jpg')
 
-        self.processLinescanTime = getFileCreation(pathToScanDirectory, '*BeachProfile*.nc') - getFileCreation(pathToScanDirectory, '*frame.data.mat*')
+        self.processLinescanTime = getFileCreation(pathToScanDirectory, '*.nc') - getFileCreation(pathToScanDirectory, '*frame.data.mat*')
 
         self.initialProcessingTime = self.coregistrationTime + self.processLinescanTime + self.processFramescanTime
 
         self.runupLag = getFileCreation(pathToScanDirectory, 'QAQC.txt') - getFileCreation(pathToScanDirectory, '*BeachProfile*.nc')
 
-        for lineScienceMatFile in pathToScanDirectory.glob('*line.science.mat'):
-            endReprocessLinescan = lineScienceMatFile.stat().st_mtime
-        self.reprocessLinescanTime = endReprocessLinescan - getFileCreation(pathToScanDirectory, 'QAQC.txt')
+        endReprocessLinescan = -999
+        self.reprocessLinescanTime = 0
+        for runuupImageFile in pathToScanDirectory.glob('*qaqc_runup.jpg'):
+            endReprocessLinescan = runuupImageFile.stat().st_mtime
+            self.reprocessLinescanTime = endReprocessLinescan - getFileCreation(pathToScanDirectory, 'QAQC.txt')
 
         self.totalProcessingTime = self.initialProcessingTime + self.reprocessLinescanTime
 
@@ -69,21 +77,27 @@ class ScanProcessing(object):
 if __name__ == '__main__':
 
     NUM_STATUSES = 7;
-    allScansPath = Path('/Users/tuwhitesides/Desktop/Graduate School/Runup Reserach/rawDataFolder');
+    allScansPath = Path('/Users/tuwhitesides/Desktop/Graduate School/Runup Reserach/testing/MasterProcessTesting (originals)');
 
     allScansDict = {};
     for i in range(NUM_STATUSES):
         allScansDict[i] = {};
 
     for scanDirectory in allScansPath.iterdir():
-        if scanDirectory.name[0] != '.':
+        if Path(scanDirectory).is_dir():
+            print(scanDirectory)
             scanStats = ScanProcessing(scanDirectory);
+            print(scanStats.completionStatus)
             allScansDict[scanStats.completionStatus][scanStats.scanTime] = scanStats;
+
+    for i in range(NUM_STATUSES):
+        allScansDict[i] = sorted(allScansDict[i])
 
     numWithSatusIdx = list(len(allScansDict[i]) for i in range(NUM_STATUSES));
     percentWithStatusIdx = list(numWithSatusIdx[i]/sum(numWithSatusIdx) for i in range(NUM_STATUSES));
 
-    print(percentWithStatusIdx)
+    print(allScansDict)
+
     ## Make Pie Chart of Progress
     # make a square figure and axes
     figure(1, figsize=(6,6))
@@ -100,8 +114,16 @@ if __name__ == '__main__':
                     # so the plotting starts on the positive y-axis.
 
     title('Completion Status for Workflow', bbox={'facecolor':'0.8', 'pad':5})
-
     show()
+
+    ## Make line graph of all the durations
+    stepNum = 3;
+    times = [timestamp for timestamp in allScansDict[stepNum]];
+    durations = [allScansDict[stepNum][timestamp].totalProcessingTime for timestamp in allScansDict[stepNum]]
+
+    plt.plot(times, durations)
+    plt.show()
+
     # Look for the last modified in all of these directories
 
     # calculate what I need to display
